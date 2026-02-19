@@ -332,7 +332,7 @@ assistant chat
 ```json
 {
   "persona": {
-    "default_persona": "mentor",
+    "default_persona": "senior",
     "show_header": true
   }
 }
