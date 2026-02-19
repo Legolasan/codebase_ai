@@ -145,6 +145,19 @@ PERMISSION_MODE=ask             # full, readonly, ask
 | `assistant security status` | Show scanner configuration |
 | `assistant security auto-scan --enable/--disable` | Toggle auto-scan on index |
 
+### Memory Commands (requires `memory` plugin)
+
+| Command | Description |
+|---------|-------------|
+| `assistant memory add <text>` | Add a new memory |
+| `assistant memory add <text> --category <cat>` | Add memory with category (preference, context, rule) |
+| `assistant memory list` | List all memories |
+| `assistant memory list --category <cat>` | List memories by category |
+| `assistant memory search <query>` | Search memories by keyword |
+| `assistant memory remove <text>` | Remove a memory |
+| `assistant memory clear` | Clear all memories |
+| `assistant memory status` | Show memory plugin status |
+
 ## Architecture
 
 ```
@@ -444,13 +457,73 @@ assistant implement "fix broken validation"
 - Provides git workflow tools to agents
 - No external dependencies
 
+#### 8. Memory (`memory`)
+
+Persistent user memories and preferences that persist across sessions. Memories are automatically injected into agent prompts so the assistant "remembers" your preferences.
+
+```bash
+# Enable the plugin
+assistant plugins enable memory
+
+# Add memories
+assistant memory add "I prefer TypeScript over JavaScript"
+assistant memory add "Use pytest for Python testing" --category rule
+assistant memory add "Working on e-commerce project" --category context
+
+# List all memories
+assistant memory list
+assistant memory list --category preference
+
+# Search memories
+assistant memory search "TypeScript"
+
+# Remove a memory
+assistant memory remove "I prefer TypeScript over JavaScript"
+
+# Clear all memories
+assistant memory clear
+
+# Check status
+assistant memory status
+```
+
+**Memory Categories:**
+
+| Category | Usage | Example |
+|----------|-------|---------|
+| `preference` | Coding preferences | "I prefer TypeScript" |
+| `context` | Project context | "Working on e-commerce project" |
+| `rule` | Coding rules | "Always use pytest for testing" |
+
+**Configuration:**
+```json
+{
+  "memory": {
+    "max_memories": 50,
+    "inject_limit": 10
+  }
+}
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `max_memories` | Maximum memories to store | 50 |
+| `inject_limit` | Max memories to inject into prompts | 10 |
+
+**Features:**
+- Persists to `~/.assistant/memories.json`
+- Auto-injects into all agent system prompts
+- Grouped by category in prompt injection
+- Search and filter by category
+- No external dependencies
+
 ### Plugin Configuration
 
 Plugin settings are stored in `~/.assistant/plugins.json`:
 
 ```json
 {
-  "enabled": ["multi_dir", "rag_guardrails", "persona", "security_scanner", "git_workflow"],
+  "enabled": ["multi_dir", "rag_guardrails", "persona", "security_scanner", "git_workflow", "memory"],
   "multi_dir": {
     "unified_collection": "multi_codebase"
   },
@@ -461,6 +534,10 @@ Plugin settings are stored in `~/.assistant/plugins.json`:
   "persona": {
     "default_persona": "senior",
     "show_header": true
+  },
+  "memory": {
+    "max_memories": 50,
+    "inject_limit": 10
   },
   "security_scanner": {
     "auto_scan_on_index": true,

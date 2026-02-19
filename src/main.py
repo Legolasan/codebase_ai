@@ -1009,6 +1009,121 @@ def git_workflow_prepare(
 
 
 # =============================================================================
+# Memory Commands (from memory plugin)
+# =============================================================================
+
+# Memory sub-commands
+memory_app = typer.Typer(help="Manage persistent memories")
+app.add_typer(memory_app, name="memory")
+
+
+@memory_app.command("add")
+def memory_add(
+    text: str = typer.Argument(..., help="Memory text to store"),
+    category: str = typer.Option(
+        "preference", "--category", "-c", help="Category: preference, context, rule"
+    ),
+):
+    """Add a new memory."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("memory")
+
+    if not plugin or not registry.is_enabled("memory"):
+        console.print("[yellow]Memory plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable memory")
+        return
+
+    plugin.add_memory_command(text, category)
+
+
+@memory_app.command("list")
+def memory_list(
+    category: Optional[str] = typer.Option(
+        None, "--category", "-c", help="Filter by category"
+    ),
+):
+    """List all memories."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("memory")
+
+    if not plugin or not registry.is_enabled("memory"):
+        console.print("[yellow]Memory plugin not enabled.[/yellow]")
+        return
+
+    plugin.list_memories_command(category)
+
+
+@memory_app.command("remove")
+def memory_remove(
+    text: str = typer.Argument(..., help="Memory text to remove"),
+):
+    """Remove a memory."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("memory")
+
+    if not plugin or not registry.is_enabled("memory"):
+        console.print("[yellow]Memory plugin not enabled.[/yellow]")
+        return
+
+    plugin.remove_memory_command(text)
+
+
+@memory_app.command("search")
+def memory_search(
+    query: str = typer.Argument(..., help="Search keyword"),
+):
+    """Search memories."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("memory")
+
+    if not plugin or not registry.is_enabled("memory"):
+        console.print("[yellow]Memory plugin not enabled.[/yellow]")
+        return
+
+    plugin.search_memories_command(query)
+
+
+@memory_app.command("clear")
+def memory_clear(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """Clear all memories."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("memory")
+
+    if not plugin or not registry.is_enabled("memory"):
+        console.print("[yellow]Memory plugin not enabled.[/yellow]")
+        return
+
+    plugin.clear_memories_command(confirm=yes)
+
+
+@memory_app.command("status")
+def memory_status():
+    """Show memory plugin status."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("memory")
+
+    if not plugin or not registry.is_enabled("memory"):
+        console.print("[yellow]Memory plugin not enabled.[/yellow]")
+        return
+
+    plugin.status_command()
+
+
+# =============================================================================
 # Main Entry Point
 # =============================================================================
 
