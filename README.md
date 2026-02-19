@@ -112,6 +112,7 @@ PERMISSION_MODE=ask             # full, readonly, ask
 | `assistant review <target>` | Code review (`--security`, `--performance`) |
 | `assistant prd <description>` | Generate a Product Requirements Document |
 | `assistant chat` | Interactive chat session |
+| `assistant chat --persona <name>` | Chat with a specific persona (mentor, senior, junior, pair) |
 | `assistant status` | Show configuration status |
 
 ### Plugin Commands
@@ -122,6 +123,15 @@ PERMISSION_MODE=ask             # full, readonly, ask
 | `assistant plugins enable <name>` | Enable a plugin |
 | `assistant plugins disable <name>` | Disable a plugin |
 | `assistant plugins status` | Show enabled plugins |
+
+### Git Workflow Commands (requires `git_workflow` plugin)
+
+| Command | Description |
+|---------|-------------|
+| `assistant git status` | Show git workflow status |
+| `assistant git branch <desc>` | Create a feature branch from description |
+| `assistant git branch <desc> --type <type>` | Create branch with specific type (feature, fix, refactor, docs) |
+| `assistant git prepare <task>` | Prepare git environment for implementation |
 
 ### Security Commands (requires `security_scanner` plugin)
 
@@ -291,7 +301,40 @@ assistant context7 --lookup react --topic hooks
 - `CONTEXT7_API_KEY` environment variable
 - Optional: `langchain-mcp-adapters` for full MCP support
 
-#### 5. Security Scanner (`security_scanner`)
+#### 5. Persona (`persona`)
+
+Role-based personas for customizing assistant behavior and communication style.
+
+```bash
+# Enable the plugin
+assistant plugins enable persona
+
+# Start chat with a persona
+assistant chat --persona mentor    # Teaching-focused
+assistant chat --persona senior    # Expert, efficient
+assistant chat --persona junior    # Curious, cautious
+assistant chat --persona pair      # Collaborative pair programmer
+
+# Default behavior (no persona)
+assistant chat
+```
+
+**Available Personas:**
+
+| Persona | Emoji | Description | Communication Style |
+|---------|-------|-------------|---------------------|
+| **mentor** | 🎓 | Teaching-focused | Breaks down problems, explains "why", encourages learning |
+| **senior** | 👨‍💻 | Expert developer | Direct, efficient, shares best practices and patterns |
+| **junior** | 🌱 | Learning alongside | Asks clarifying questions, cautious, confirms understanding |
+| **pair** | 👥 | Pair programmer | Thinks aloud, collaborative, suggests refactors together |
+
+**Features:**
+- Modifies assistant's communication style
+- Persists for the entire chat session
+- Shown in the welcome panel header
+- No external dependencies
+
+#### 6. Security Scanner (`security_scanner`)
 
 Proactively detect security threats in your codebase including secrets, malware, and vulnerabilities.
 
@@ -337,13 +380,61 @@ assistant security status
 - Markdown report generation
 - Skip test files for certain patterns
 
+#### 7. Git Workflow (`git_workflow`)
+
+Enforces proper git branching workflow for code changes. Automatically creates feature branches before any implementation.
+
+```bash
+# Enable the plugin
+assistant plugins enable git_workflow
+
+# Check workflow status
+assistant git status
+
+# Manually create a feature branch
+assistant git branch "add user authentication"
+assistant git branch "fix login bug" --type fix
+assistant git branch "improve performance" --type refactor
+
+# Prepare for implementation (creates branch if needed)
+assistant git prepare "add new API endpoint"
+```
+
+**Automatic Branching:**
+
+When enabled, the implementation agent automatically creates feature branches before making any code changes:
+
+```bash
+# This automatically creates feature/add-login-page branch
+assistant implement "add login page"
+
+# This automatically creates fix/broken-validation branch
+assistant implement "fix broken validation"
+```
+
+**Branch Naming Convention:**
+
+| Prefix | Usage | Example |
+|--------|-------|---------|
+| `feature/` | New features | `feature/add-user-auth` |
+| `fix/` | Bug fixes | `fix/login-validation` |
+| `refactor/` | Code refactoring | `refactor/auth-module` |
+| `docs/` | Documentation | `docs/update-readme` |
+
+**Features:**
+- Auto-detects branch type from task description
+- Slugifies descriptions into valid branch names
+- Checks if already on a feature branch (skips creation)
+- Provides git workflow tools to agents
+- No external dependencies
+
 ### Plugin Configuration
 
 Plugin settings are stored in `~/.assistant/plugins.json`:
 
 ```json
 {
-  "enabled": ["multi_dir", "rag_guardrails", "security_scanner"],
+  "enabled": ["multi_dir", "rag_guardrails", "persona", "security_scanner", "git_workflow"],
   "multi_dir": {
     "unified_collection": "multi_codebase"
   },
@@ -356,6 +447,10 @@ Plugin settings are stored in `~/.assistant/plugins.json`:
     "scan_secrets": true,
     "scan_malware": true,
     "scan_vulnerabilities": true
+  },
+  "git_workflow": {
+    "auto_branch": true,
+    "require_feature_branch": true
   }
 }
 ```
@@ -410,6 +505,11 @@ assistant prd "Add user notifications feature"
 
 # Interactive session
 assistant chat
+
+# Chat with different personas (with persona plugin enabled)
+assistant chat --persona mentor   # Great for learning new concepts
+assistant chat --persona senior   # Quick, expert answers
+assistant chat --persona pair     # Collaborative coding
 
 # Multi-directory search (with plugin enabled)
 assistant ask "How does auth work?" --all-dirs

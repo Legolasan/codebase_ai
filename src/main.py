@@ -334,6 +334,7 @@ def review(
 def chat(
     collection: str = typer.Option("codebase", "--collection", "-c", help="Collection name"),
     mode: str = typer.Option("ask", "--mode", "-m", help="Permission mode: full, readonly, ask"),
+    persona: Optional[str] = typer.Option(None, "--persona", "-p", help="Persona: mentor, senior, junior, pair"),
 ):
     """Start an interactive chat session."""
     if not check_api_key():
@@ -353,10 +354,32 @@ def chat(
     init_vector_store(collection)
     orchestrator = OrchestratorAgent()
 
+    # Set persona if specified
+    persona_header = None
+    if persona:
+        from .plugins import get_registry
+        registry = get_registry()
+        plugin = registry.get("persona")
+        if plugin and registry.is_enabled("persona"):
+            try:
+                active_persona = plugin.set_persona(persona)
+                persona_header = f"{active_persona.emoji} {active_persona.name}"
+            except ValueError as e:
+                console.print(f"[red]Error:[/red] {e}")
+                raise typer.Exit(1)
+        else:
+            console.print("[yellow]Persona plugin not enabled. Run: assistant plugins enable persona[/yellow]")
+            raise typer.Exit(1)
+
+    # Build welcome panel content
+    welcome_lines = ["[bold cyan]Multi-Agent Coding Assistant[/bold cyan]\n"]
+    welcome_lines.append(f"Mode: [yellow]{mode}[/yellow]")
+    if persona_header:
+        welcome_lines.append(f"Persona: [magenta]{persona_header}[/magenta]")
+    welcome_lines.append("Type [green]help[/green] for commands, [red]exit[/red] to quit")
+
     console.print(Panel(
-        "[bold cyan]Multi-Agent Coding Assistant[/bold cyan]\n\n"
-        f"Mode: [yellow]{mode}[/yellow]\n"
-        "Type [green]help[/green] for commands, [red]exit[/red] to quit",
+        "\n".join(welcome_lines),
         title="Welcome",
         border_style="cyan",
     ))
@@ -860,6 +883,123 @@ def security_auto_scan(
         return
 
     plugin.auto_scan_command(enable=enable)
+
+
+# =============================================================================
+# Git Workflow Commands (from git_workflow plugin)
+# =============================================================================
+
+# Git sub-commands
+git_app = typer.Typer(help="Git workflow commands")
+app.add_typer(git_app, name="git")
+
+
+@git_app.command("status")
+def git_workflow_status():
+    """Show git workflow status."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("git_workflow")
+
+    if not plugin or not registry.is_enabled("git_workflow"):
+        console.print("[yellow]Git workflow plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable git_workflow")
+        return
+
+    info = plugin.get_workflow_info()
+
+    if not info["is_git_repo"]:
+        console.print("[yellow]Not a git repository[/yellow]")
+        console.print("\nTo initialize git:")
+        console.print("  git init")
+        return
+
+    table = Table(title="Git Workflow Status")
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value")
+
+    branch_style = "green" if info["is_feature_branch"] else "yellow"
+    table.add_row("Current Branch", f"[{branch_style}]{info['current_branch']}[/{branch_style}]")
+    table.add_row("Feature Branch", "[green]Yes[/green]" if info["is_feature_branch"] else "[yellow]No[/yellow]")
+    table.add_row("Clean Working Directory", "[green]Yes[/green]" if info["is_clean"] else "[yellow]No - has changes[/yellow]")
+    table.add_row("Auto-create Branches", "[green]Enabled[/green]" if info["auto_branch"] else "[dim]Disabled[/dim]")
+
+    console.print(table)
+
+    if not info["is_feature_branch"]:
+        console.print("\n[dim]Tip: Create a feature branch before making changes:[/dim]")
+        console.print("  assistant git branch \"your feature description\"")
+
+
+@git_app.command("branch")
+def git_workflow_branch(
+    description: str = typer.Argument(..., help="Description of the work"),
+    branch_type: str = typer.Option("auto", "--type", "-t", help="Branch type: feature, fix, refactor, docs, auto"),
+):
+    """Create a feature branch for implementation."""
+    from .plugins import get_registry
+    from .plugins.git_workflow import ensure_feature_branch, BranchType, infer_branch_type
+
+    registry = get_registry()
+    plugin = registry.get("git_workflow")
+
+    if not plugin or not registry.is_enabled("git_workflow"):
+        console.print("[yellow]Git workflow plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable git_workflow")
+        return
+
+    # Determine branch type
+    if branch_type == "auto":
+        b_type = infer_branch_type(description)
+    else:
+        try:
+            b_type = BranchType(branch_type.lower())
+        except ValueError:
+            console.print(f"[red]Invalid branch type:[/red] {branch_type}")
+            console.print("Valid types: feature, fix, refactor, docs, auto")
+            raise typer.Exit(1)
+
+    result = ensure_feature_branch(description, b_type, auto_create=True)
+
+    if result.success:
+        if result.was_created:
+            console.print(f"[green]Created and switched to branch:[/green] {result.branch_name}")
+        else:
+            console.print(f"[green]Switched to existing branch:[/green] {result.branch_name}")
+        console.print("\nYou're ready to make changes!")
+    else:
+        console.print(f"[red]Error:[/red] {result.message}")
+        raise typer.Exit(1)
+
+
+@git_app.command("prepare")
+def git_workflow_prepare(
+    task: str = typer.Argument(..., help="Description of what you're implementing"),
+):
+    """Prepare git environment for implementing changes."""
+    from .plugins import get_registry
+    from .plugins.git_workflow import prepare_for_implementation
+
+    registry = get_registry()
+    plugin = registry.get("git_workflow")
+
+    if not plugin or not registry.is_enabled("git_workflow"):
+        console.print("[yellow]Git workflow plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable git_workflow")
+        return
+
+    result = prepare_for_implementation(task)
+
+    if result.success:
+        action = "Created" if result.was_created else "Using"
+        console.print(f"[green]{action} branch:[/green] {result.branch_name}")
+        console.print("\n[bold]Ready to implement![/bold]")
+        console.print("\nWhen done, commit your changes:")
+        console.print("  git add <files>")
+        console.print('  git commit -m "Your message"')
+    else:
+        console.print(f"[yellow]{result.message}[/yellow]")
 
 
 # =============================================================================
