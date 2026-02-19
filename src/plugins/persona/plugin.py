@@ -26,11 +26,22 @@ class PersonaPlugin(BasePlugin):
     - junior: Curious, asks clarifying questions, cautious
     - pair: Collaborative pair programmer, thinks aloud
 
+    Configuration (in ~/.assistant/plugins.json):
+    ```json
+    {
+      "persona": {
+        "default_persona": "mentor",
+        "show_header": true
+      }
+    }
+    ```
+
     Usage:
         assistant chat --persona mentor
         assistant chat --persona senior
         assistant chat --persona junior
         assistant chat --persona pair
+        assistant chat  # Uses default_persona if configured
     """
 
     name = "persona"
@@ -41,14 +52,41 @@ class PersonaPlugin(BasePlugin):
     def __init__(self):
         super().__init__()
         self.active_persona: Optional[str] = None
+        self.default_persona: Optional[str] = None
+        self.show_header: bool = True
+
+    def configure(self, config: dict[str, Any]) -> None:
+        """Configure the plugin from settings.
+
+        Args:
+            config: Configuration dict with optional keys:
+                - default_persona: Persona to use when none specified (mentor, senior, junior, pair)
+                - show_header: Whether to show persona header in chat (default: True)
+        """
+        if "default_persona" in config:
+            persona_name = config["default_persona"]
+            if persona_name and persona_name in PERSONAS:
+                self.default_persona = persona_name
+                logger.info(f"Default persona set to: {persona_name}")
+            elif persona_name:
+                logger.warning(f"Invalid default persona: {persona_name}")
+
+        if "show_header" in config:
+            self.show_header = bool(config["show_header"])
 
     def setup(self) -> None:
         """Initialize the plugin."""
         logger.info("Persona plugin initialized")
+        if self.default_persona:
+            logger.info(f"Default persona: {self.default_persona}")
 
     def teardown(self) -> None:
         """Cleanup the plugin."""
         self.active_persona = None
+
+    def get_default_persona(self) -> Optional[str]:
+        """Get the configured default persona name."""
+        return self.default_persona
 
     def get_tools(self) -> list:
         """Return LangChain tools (none for this plugin)."""

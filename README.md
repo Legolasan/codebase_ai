@@ -328,10 +328,26 @@ assistant chat
 | **junior** | 🌱 | Learning alongside | Asks clarifying questions, cautious, confirms understanding |
 | **pair** | 👥 | Pair programmer | Thinks aloud, collaborative, suggests refactors together |
 
+**Configuration:**
+```json
+{
+  "persona": {
+    "default_persona": "mentor",
+    "show_header": true
+  }
+}
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `default_persona` | Persona to use when `--persona` not specified | `null` (none) |
+| `show_header` | Show persona emoji/name in chat header | `true` |
+
 **Features:**
 - Modifies assistant's communication style
 - Persists for the entire chat session
-- Shown in the welcome panel header
+- Configurable default persona
+- Shown in the welcome panel header (configurable)
 - No external dependencies
 
 #### 6. Security Scanner (`security_scanner`)
@@ -441,6 +457,10 @@ Plugin settings are stored in `~/.assistant/plugins.json`:
   "rag_guardrails": {
     "strict_mode": false,
     "show_verification": true
+  },
+  "persona": {
+    "default_persona": "senior",
+    "show_header": true
   },
   "security_scanner": {
     "auto_scan_on_index": true,

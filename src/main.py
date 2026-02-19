@@ -354,22 +354,28 @@ def chat(
     init_vector_store(collection)
     orchestrator = OrchestratorAgent()
 
-    # Set persona if specified
+    # Set persona if specified (or use default from config)
     persona_header = None
-    if persona:
-        from .plugins import get_registry
-        registry = get_registry()
-        plugin = registry.get("persona")
-        if plugin and registry.is_enabled("persona"):
+    from .plugins import get_registry
+    registry = get_registry()
+    plugin = registry.get("persona")
+
+    if plugin and registry.is_enabled("persona"):
+        # Use CLI arg or fall back to default persona
+        persona_to_use = persona or plugin.get_default_persona()
+
+        if persona_to_use:
             try:
-                active_persona = plugin.set_persona(persona)
-                persona_header = f"{active_persona.emoji} {active_persona.name}"
+                active_persona = plugin.set_persona(persona_to_use)
+                if plugin.show_header:
+                    persona_header = f"{active_persona.emoji} {active_persona.name}"
             except ValueError as e:
                 console.print(f"[red]Error:[/red] {e}")
                 raise typer.Exit(1)
-        else:
-            console.print("[yellow]Persona plugin not enabled. Run: assistant plugins enable persona[/yellow]")
-            raise typer.Exit(1)
+    elif persona:
+        # User specified persona but plugin not enabled
+        console.print("[yellow]Persona plugin not enabled. Run: assistant plugins enable persona[/yellow]")
+        raise typer.Exit(1)
 
     # Build welcome panel content
     welcome_lines = ["[bold cyan]Multi-Agent Coding Assistant[/bold cyan]\n"]
