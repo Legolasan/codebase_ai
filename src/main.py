@@ -87,6 +87,26 @@ def index(
 
             console.print(lang_table)
 
+        # Auto-scan for security issues if security_scanner plugin is enabled
+        try:
+            from .plugins import get_registry
+            registry = get_registry()
+            if registry.is_enabled("security_scanner"):
+                plugin = registry.get("security_scanner")
+                if plugin and plugin.auto_scan_on_index:
+                    console.print("\n[dim]Running security scan...[/dim]")
+                    report = plugin.scan_codebase(str(codebase_path))
+                    if report.findings:
+                        console.print(f"\n[yellow]Security scan found {len(report.findings)} issues[/yellow]")
+                        console.print(report.to_summary())
+                        if report.has_critical():
+                            console.print("[red bold]CRITICAL issues found! Run 'assistant security scan' for details.[/red bold]")
+                    else:
+                        console.print("[green]Security scan: No issues found[/green]")
+        except Exception as e:
+            # Don't fail indexing if security scan fails
+            pass
+
     except Exception as e:
         console.print(f"[red]Error indexing codebase:[/red] {e}")
         raise typer.Exit(1)
@@ -753,6 +773,93 @@ def context7(
         return
 
     plugin.context7_command(status=status, lookup=lookup, topic=topic)
+
+
+# =============================================================================
+# Security Scanner Commands (from security_scanner plugin)
+# =============================================================================
+
+# Security sub-commands
+security_app = typer.Typer(help="Security scanning commands")
+app.add_typer(security_app, name="security")
+
+
+@security_app.command("scan")
+def security_scan(
+    path: Optional[str] = typer.Argument(None, help="Path to scan (default: current directory)"),
+    secrets_only: bool = typer.Option(False, "--secrets-only", help="Only scan for secrets"),
+    malware_only: bool = typer.Option(False, "--malware-only", help="Only scan for malware"),
+    vulns_only: bool = typer.Option(False, "--vulns-only", help="Only scan for vulnerabilities"),
+):
+    """Scan codebase for security issues."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("security_scanner")
+
+    if not plugin or not registry.is_enabled("security_scanner"):
+        console.print("[yellow]Security scanner plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable security_scanner")
+        return
+
+    plugin.scan_command(
+        path=path,
+        secrets_only=secrets_only,
+        malware_only=malware_only,
+        vulns_only=vulns_only,
+    )
+
+
+@security_app.command("report")
+def security_report(
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Save report to file"),
+):
+    """Generate detailed security report."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("security_scanner")
+
+    if not plugin or not registry.is_enabled("security_scanner"):
+        console.print("[yellow]Security scanner plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable security_scanner")
+        return
+
+    plugin.report_command(output=output)
+
+
+@security_app.command("status")
+def security_status():
+    """Show security scanner status and configuration."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("security_scanner")
+
+    if not plugin or not registry.is_enabled("security_scanner"):
+        console.print("[yellow]Security scanner plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable security_scanner")
+        return
+
+    plugin.status_command()
+
+
+@security_app.command("auto-scan")
+def security_auto_scan(
+    enable: bool = typer.Option(True, "--enable/--disable", help="Enable or disable auto-scan"),
+):
+    """Enable or disable automatic scanning on index."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("security_scanner")
+
+    if not plugin or not registry.is_enabled("security_scanner"):
+        console.print("[yellow]Security scanner plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable security_scanner")
+        return
+
+    plugin.auto_scan_command(enable=enable)
 
 
 # =============================================================================

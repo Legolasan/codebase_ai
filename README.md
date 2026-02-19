@@ -123,6 +123,18 @@ PERMISSION_MODE=ask             # full, readonly, ask
 | `assistant plugins disable <name>` | Disable a plugin |
 | `assistant plugins status` | Show enabled plugins |
 
+### Security Commands (requires `security_scanner` plugin)
+
+| Command | Description |
+|---------|-------------|
+| `assistant security scan [path]` | Scan for security issues |
+| `assistant security scan --secrets-only` | Scan for secrets only |
+| `assistant security scan --malware-only` | Scan for malware only |
+| `assistant security scan --vulns-only` | Scan for vulnerabilities only |
+| `assistant security report [-o file]` | Generate detailed report |
+| `assistant security status` | Show scanner configuration |
+| `assistant security auto-scan --enable/--disable` | Toggle auto-scan on index |
+
 ## Architecture
 
 ```
@@ -279,19 +291,71 @@ assistant context7 --lookup react --topic hooks
 - `CONTEXT7_API_KEY` environment variable
 - Optional: `langchain-mcp-adapters` for full MCP support
 
+#### 5. Security Scanner (`security_scanner`)
+
+Proactively detect security threats in your codebase including secrets, malware, and vulnerabilities.
+
+```bash
+# Enable the plugin
+assistant plugins enable security_scanner
+
+# Scan current directory
+assistant security scan
+
+# Scan specific path
+assistant security scan /path/to/code
+
+# Scan for specific issues only
+assistant security scan --secrets-only
+assistant security scan --malware-only
+assistant security scan --vulns-only
+
+# Generate detailed report
+assistant security report
+assistant security report --output security-report.md
+
+# Configure auto-scan on index
+assistant security auto-scan --enable
+assistant security auto-scan --disable
+
+# Show scanner status
+assistant security status
+```
+
+**Detection Capabilities:**
+
+| Category | Patterns | Examples |
+|----------|----------|----------|
+| **Secrets** | 14 patterns | AWS keys, GitHub tokens, API keys, private keys, passwords, JWT secrets, database URLs, Slack/Stripe/Google tokens |
+| **Malware** | 8 patterns | Reverse shells, crypto miners, data exfiltration, keyloggers, obfuscated code, backdoors |
+| **Vulnerabilities** | 15 patterns | SQL injection, command injection, XSS, path traversal, insecure deserialization, weak crypto, debug mode |
+
+**Features:**
+- Automatic scanning after `assistant index` (configurable)
+- Agent tool for security reviews
+- Severity levels: CRITICAL, HIGH, MEDIUM, LOW, INFO
+- Markdown report generation
+- Skip test files for certain patterns
+
 ### Plugin Configuration
 
 Plugin settings are stored in `~/.assistant/plugins.json`:
 
 ```json
 {
-  "enabled": ["multi_dir", "rag_guardrails"],
+  "enabled": ["multi_dir", "rag_guardrails", "security_scanner"],
   "multi_dir": {
     "unified_collection": "multi_codebase"
   },
   "rag_guardrails": {
     "strict_mode": false,
     "show_verification": true
+  },
+  "security_scanner": {
+    "auto_scan_on_index": true,
+    "scan_secrets": true,
+    "scan_malware": true,
+    "scan_vulnerabilities": true
   }
 }
 ```
