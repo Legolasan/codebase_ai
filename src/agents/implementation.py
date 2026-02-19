@@ -15,11 +15,12 @@ class ImplementationAgent(BaseAgent):
     - Modifying existing code
     - Refactoring and code improvements
     - Following project conventions
+    - PRD-driven implementation
 
     Trigger keywords: "implement", "add", "create", "fix", "modify", "refactor"
     """
 
-    def __init__(self):
+    def __init__(self, prd_context: str = None):
         tools = [
             search_codebase,
             read_file,
@@ -31,6 +32,8 @@ class ImplementationAgent(BaseAgent):
             git_add,
         ]
 
+        self.prd_context = prd_context
+
         super().__init__(
             name="implementation",
             description="Writes and modifies code following project conventions",
@@ -38,7 +41,7 @@ class ImplementationAgent(BaseAgent):
         )
 
     def _default_system_prompt(self) -> str:
-        return """You are an Implementation Agent specialized in writing and modifying code.
+        base_prompt = """You are an Implementation Agent specialized in writing and modifying code.
 
 Your primary capabilities:
 1. **Code Writing**: Create new files with well-structured, clean code
@@ -73,6 +76,22 @@ Available tools:
 
 Remember: Quality over quantity. Write code that future developers will thank you for.
 """.format(tools=self.get_tool_descriptions())
+
+        # Add PRD context if available
+        if self.prd_context:
+            base_prompt += f"""
+
+## PRD Context
+
+You are implementing features based on the following Product Requirements Document:
+
+{self.prd_context}
+
+**Important:** Follow the requirements, acceptance criteria, and technical constraints specified in the PRD.
+Ensure each functional requirement is addressed and acceptance criteria are met.
+"""
+
+        return base_prompt
 
     def implement_feature(self, feature_description: str) -> dict:
         """Implement a new feature based on description."""
@@ -145,6 +164,50 @@ Steps:
 2. Understand the existing structure
 3. Add the new code in the appropriate location
 4. Show me the updated file""",
+            }
+        ]
+        return self.invoke(messages)
+
+    def set_prd_context(self, prd_content: str) -> None:
+        """Set PRD context for implementation.
+
+        Args:
+            prd_content: The PRD document content
+        """
+        self.prd_context = prd_content
+
+    def implement_from_prd(self, prd_path: str) -> dict:
+        """Implement features based on a PRD file.
+
+        Args:
+            prd_path: Path to the PRD file
+
+        Returns:
+            Implementation result
+        """
+        # Read the PRD file
+        from ..tools.file_ops import read_file
+        prd_content = read_file.invoke({"file_path": prd_path})
+
+        if "Error" in prd_content:
+            return {"content": f"Failed to read PRD: {prd_content}", "agent": self.name}
+
+        # Set the PRD context
+        self.set_prd_context(prd_content)
+
+        messages = [
+            {
+                "role": "user",
+                "content": f"""Implement the features specified in this PRD:
+
+{prd_content}
+
+Steps:
+1. Review the functional requirements
+2. Search the codebase to understand existing patterns
+3. Implement each requirement following the acceptance criteria
+4. Ensure non-functional requirements are addressed
+5. Show the implementation for each requirement""",
             }
         ]
         return self.invoke(messages)

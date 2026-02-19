@@ -6,6 +6,7 @@ from .research import ResearchAgent
 from .implementation import ImplementationAgent
 from .testing import TestingAgent
 from .review import ReviewAgent
+from .prd import PRDAgent
 
 __all__ = [
     "BaseAgent",
@@ -14,4 +15,5 @@ __all__ = [
     "ImplementationAgent",
     "TestingAgent",
     "ReviewAgent",
+    "PRDAgent",
 ]

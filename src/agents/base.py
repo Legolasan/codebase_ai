@@ -36,10 +36,23 @@ class BaseAgent(ABC):
 
     @property
     def system_prompt(self) -> str:
-        """Get the system prompt for this agent."""
-        if self._system_prompt:
-            return self._system_prompt
-        return self._default_system_prompt()
+        """Get the system prompt for this agent.
+
+        Includes any additions from enabled plugins (e.g., guardrails).
+        """
+        base_prompt = self._system_prompt if self._system_prompt else self._default_system_prompt()
+
+        # Add plugin prompt additions if available
+        try:
+            from ..plugins import get_registry
+            registry = get_registry()
+            plugin_additions = registry.get_system_prompt_additions()
+            if plugin_additions:
+                base_prompt = f"{base_prompt}\n\n{plugin_additions}"
+        except ImportError:
+            pass  # Plugins not available
+
+        return base_prompt
 
     @abstractmethod
     def _default_system_prompt(self) -> str:

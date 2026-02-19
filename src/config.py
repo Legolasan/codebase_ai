@@ -11,6 +11,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+# Default assistant config directory
+ASSISTANT_CONFIG_DIR = Path.home() / ".assistant"
+
+
 class PermissionMode(Enum):
     """Permission modes for agent file operations."""
 
@@ -195,3 +199,14 @@ def set_permission_mode(mode: str) -> None:
     """Update permission mode at runtime."""
     config = get_config()
     config.permission_mode = PermissionMode(mode)
+
+
+def get_config_dir() -> Path:
+    """Get the assistant config directory, creating if needed."""
+    ASSISTANT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    return ASSISTANT_CONFIG_DIR
+
+
+def get_plugin_config_path() -> Path:
+    """Get the path to the plugin configuration file."""
+    return get_config_dir() / "plugins.json"

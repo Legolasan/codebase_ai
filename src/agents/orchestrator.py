@@ -11,6 +11,7 @@ from .research import ResearchAgent
 from .implementation import ImplementationAgent
 from .testing import TestingAgent
 from .review import ReviewAgent
+from .prd import PRDAgent
 
 
 # Task routing keywords
@@ -30,6 +31,12 @@ TASK_KEYWORDS = {
     "review": [
         "review", "check", "improve", "quality", "security",
         "audit", "assess", "evaluate", "inspect",
+    ],
+    "prd": [
+        "prd", "product requirement", "requirements doc", "spec",
+        "feature spec", "write requirements", "create prd",
+        "document requirements", "requirements document",
+        "product specification", "feature specification",
     ],
 }
 
@@ -54,6 +61,7 @@ class OrchestratorAgent:
             "implementation": ImplementationAgent(),
             "testing": TestingAgent(),
             "review": ReviewAgent(),
+            "prd": PRDAgent(),
         }
 
     def _classify_task(self, request: str) -> str:
@@ -86,6 +94,7 @@ class OrchestratorAgent:
 - implementation: Writing or modifying code, fixing bugs, adding features
 - testing: Creating tests, running tests, analyzing coverage
 - review: Code review, quality checks, security audits
+- prd: Creating product requirements documents, feature specifications, requirements gathering
 
 Respond with ONLY the category name, nothing else."""),
             HumanMessage(content=request),

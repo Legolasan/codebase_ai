@@ -21,6 +21,15 @@ app = typer.Typer(
     help="Multi-agent coding assistant with RAG-powered codebase understanding",
     add_completion=False,
 )
+
+# Plugin sub-commands
+plugins_app = typer.Typer(help="Manage plugins")
+app.add_typer(plugins_app, name="plugins")
+
+# Auth sub-commands (for GitHub auth plugin)
+auth_app = typer.Typer(help="Manage authentication")
+app.add_typer(auth_app, name="auth")
+
 console = Console()
 
 
@@ -121,50 +130,98 @@ def ask(
 
 @app.command()
 def implement(
-    description: str = typer.Argument(..., help="Description of what to implement"),
+    description: str = typer.Argument(None, help="Description of what to implement"),
     collection: str = typer.Option("codebase", "--collection", "-c", help="Collection name"),
     with_tests: bool = typer.Option(False, "--tests", "-t", help="Also generate tests"),
     with_review: bool = typer.Option(False, "--review", "-r", help="Include code review"),
+    from_prd: str = typer.Option(None, "--from-prd", "-p", help="Path to PRD file to implement"),
 ):
-    """Implement a feature or fix based on description."""
+    """Implement a feature or fix based on description or PRD."""
     if not check_api_key():
+        raise typer.Exit(1)
+
+    if not description and not from_prd:
+        console.print("[red]Error:[/red] Provide either a description or --from-prd path")
         raise typer.Exit(1)
 
     from .tools.code_search import init_vector_store
     from .graph.workflow import run_workflow
+    from .agents import ImplementationAgent
 
     init_vector_store(collection)
 
-    console.print(f"\n[cyan]Task:[/cyan] {description}\n")
+    # Handle PRD-based implementation
+    if from_prd:
+        console.print(f"\n[cyan]Implementing from PRD:[/cyan] {from_prd}\n")
 
-    agents_used = ["implementation"]
-    if with_tests:
-        agents_used.append("testing")
-    if with_review:
-        agents_used.append("review")
-
-    console.print(f"[dim]Agents: {', '.join(agents_used)}[/dim]\n")
-
-    with console.status("[bold green]Working..."):
-        try:
-            result = run_workflow(
-                f"Implement: {description}",
-                needs_testing=with_tests,
-                needs_review=with_review,
-            )
-
-            if result.get("error"):
-                console.print(f"[red]Error:[/red] {result['error']}")
-            else:
-                console.print(Panel(
-                    Markdown(result.get("final_result", "No response generated.")),
-                    title="[green]Implementation Complete[/green]",
-                    border_style="green",
-                ))
-
-        except Exception as e:
-            console.print(f"[red]Error:[/red] {e}")
+        # Read PRD content
+        from pathlib import Path
+        prd_path = Path(from_prd)
+        if not prd_path.exists():
+            console.print(f"[red]Error:[/red] PRD file not found: {from_prd}")
             raise typer.Exit(1)
+
+        prd_content = prd_path.read_text()
+        console.print("[dim]PRD loaded. Starting implementation...[/dim]\n")
+
+        agents_used = ["implementation (PRD-driven)"]
+        if with_tests:
+            agents_used.append("testing")
+        if with_review:
+            agents_used.append("review")
+
+        console.print(f"[dim]Agents: {', '.join(agents_used)}[/dim]\n")
+
+        with console.status("[bold green]Implementing from PRD..."):
+            try:
+                # Create implementation agent with PRD context
+                impl_agent = ImplementationAgent(prd_context=prd_content)
+                result = impl_agent.implement_from_prd(str(prd_path))
+
+                if "Error" in result.get("content", ""):
+                    console.print(f"[red]Error:[/red] {result['content']}")
+                else:
+                    console.print(Panel(
+                        Markdown(result.get("content", "No response generated.")),
+                        title="[green]PRD Implementation Complete[/green]",
+                        border_style="green",
+                    ))
+
+            except Exception as e:
+                console.print(f"[red]Error:[/red] {e}")
+                raise typer.Exit(1)
+    else:
+        # Standard implementation
+        console.print(f"\n[cyan]Task:[/cyan] {description}\n")
+
+        agents_used = ["implementation"]
+        if with_tests:
+            agents_used.append("testing")
+        if with_review:
+            agents_used.append("review")
+
+        console.print(f"[dim]Agents: {', '.join(agents_used)}[/dim]\n")
+
+        with console.status("[bold green]Working..."):
+            try:
+                result = run_workflow(
+                    f"Implement: {description}",
+                    needs_testing=with_tests,
+                    needs_review=with_review,
+                )
+
+                if result.get("error"):
+                    console.print(f"[red]Error:[/red] {result['error']}")
+                else:
+                    console.print(Panel(
+                        Markdown(result.get("final_result", "No response generated.")),
+                        title="[green]Implementation Complete[/green]",
+                        border_style="green",
+                    ))
+
+            except Exception as e:
+                console.print(f"[red]Error:[/red] {e}")
+                raise typer.Exit(1)
 
 
 @app.command()
@@ -360,6 +417,7 @@ def _show_help():
 - Request implementations: "Add input validation to the user form"
 - Ask for reviews: "Review the authentication module for security issues"
 - Generate tests: "Write tests for the API endpoints"
+- Create PRDs: "Create a PRD for user authentication"
 
 ## Agents
 
@@ -367,8 +425,62 @@ def _show_help():
 - **Implementation**: Writing and modifying code
 - **Testing**: Creating and running tests
 - **Review**: Code review and quality checks
+- **PRD**: Creating product requirements documents
 """
     console.print(Markdown(help_text))
+
+
+@app.command()
+def prd(
+    description: str = typer.Argument(..., help="Description of the feature to create PRD for"),
+    output_dir: str = typer.Option("docs/prd", "--output", "-o", help="Output directory for PRD"),
+    collection: str = typer.Option("codebase", "--collection", "-c", help="Collection name"),
+    no_research: bool = typer.Option(False, "--no-research", help="Skip web research for competitors"),
+):
+    """Create a Product Requirements Document for a feature."""
+    if not check_api_key():
+        raise typer.Exit(1)
+
+    from .tools.code_search import init_vector_store
+    from .graph.workflow import run_workflow
+    from .graph.state import TaskType
+
+    init_vector_store(collection)
+
+    console.print(f"\n[cyan]Creating PRD for:[/cyan] {description}\n")
+
+    if not no_research:
+        console.print("[dim]Including competitor research via web search...[/dim]\n")
+
+    with console.status("[bold green]Generating PRD..."):
+        try:
+            # Add PRD prefix to trigger PRD routing
+            request = f"Create a PRD for: {description}"
+            result = run_workflow(request)
+
+            if result.get("error"):
+                console.print(f"[red]Error:[/red] {result['error']}")
+            else:
+                # Show PRD file path if saved
+                if result.get("prd_file_path"):
+                    console.print(f"\n[green]✓[/green] PRD saved to: [cyan]{result['prd_file_path']}[/cyan]\n")
+
+                console.print(Panel(
+                    Markdown(result.get("final_result", "No PRD generated.")),
+                    title="[green]Product Requirements Document[/green]",
+                    border_style="green",
+                ))
+
+                # Show next steps
+                console.print("\n[bold]Next Steps:[/bold]")
+                console.print("1. Review the PRD and make any necessary changes")
+                console.print("2. Get stakeholder approval")
+                if result.get("prd_file_path"):
+                    console.print(f"3. Implement with: [cyan]assistant implement --from-prd {result.get('prd_file_path')}[/cyan]")
+
+        except Exception as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
 
 
 @app.command()
@@ -398,9 +510,270 @@ def status():
     except Exception:
         console.print("\n[yellow]No codebase indexed yet. Run 'assistant index' first.[/yellow]")
 
+    # Show enabled plugins
+    try:
+        from .plugins import get_registry
+        registry = get_registry()
+        enabled = registry.get_enabled()
+        if enabled:
+            console.print(f"\n[bold]Enabled Plugins ({len(enabled)}):[/bold]")
+            for plugin in enabled:
+                console.print(f"  [green]{plugin.name}[/green] v{plugin.version}")
+        else:
+            console.print("\n[dim]No plugins enabled. Run 'assistant plugins list' to see available plugins.[/dim]")
+    except ImportError:
+        pass
+
+
+# =============================================================================
+# Plugin Management Commands
+# =============================================================================
+
+
+@plugins_app.command("list")
+def plugins_list():
+    """List all available plugins."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugins = registry.list_all()
+
+    if not plugins:
+        console.print("[yellow]No plugins discovered.[/yellow]")
+        return
+
+    table = Table(title="Available Plugins")
+    table.add_column("Name", style="cyan")
+    table.add_column("Version", style="dim")
+    table.add_column("Status")
+    table.add_column("Description")
+
+    for plugin in plugins:
+        status = "[green]Enabled[/green]" if plugin.enabled else "[dim]Disabled[/dim]"
+        table.add_row(plugin.name, plugin.version, status, plugin.description)
+
+    console.print(table)
+
+
+@plugins_app.command("enable")
+def plugins_enable(name: str = typer.Argument(..., help="Plugin name to enable")):
+    """Enable a plugin."""
+    from .plugins import get_registry, PluginError, PluginDependencyError
+
+    registry = get_registry()
+
+    try:
+        registry.enable(name)
+        console.print(f"[green]Enabled plugin:[/green] {name}")
+    except PluginDependencyError as e:
+        console.print(f"[red]Missing dependencies:[/red] {', '.join(e.missing_deps)}")
+        console.print(f"Install with: pip install {' '.join(e.missing_deps)}")
+    except PluginError as e:
+        console.print(f"[red]Error:[/red] {e.message}")
+
+
+@plugins_app.command("disable")
+def plugins_disable(name: str = typer.Argument(..., help="Plugin name to disable")):
+    """Disable a plugin."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    registry.disable(name)
+    console.print(f"[yellow]Disabled plugin:[/yellow] {name}")
+
+
+@plugins_app.command("status")
+def plugins_status():
+    """Show enabled plugins and their status."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    enabled = registry.get_enabled()
+
+    if not enabled:
+        console.print("[yellow]No plugins enabled.[/yellow]")
+        console.print("Enable plugins with: assistant plugins enable <name>")
+        return
+
+    console.print(f"\n[bold]Enabled Plugins ({len(enabled)})[/bold]\n")
+
+    for plugin in enabled:
+        console.print(f"  [green]{plugin.name}[/green] v{plugin.version}")
+        console.print(f"    {plugin.description}")
+
+        # Show plugin tools
+        tools = plugin.get_tools()
+        if tools:
+            tool_names = [t.name for t in tools]
+            console.print(f"    [dim]Tools: {', '.join(tool_names)}[/dim]")
+
+
+# =============================================================================
+# Multi-Directory Commands (from multi_dir plugin)
+# =============================================================================
+
+
+@app.command("add-dir")
+def add_dir(
+    path: str = typer.Argument(..., help="Path to directory to add"),
+    alias: Optional[str] = typer.Option(None, "--alias", "-a", help="Alias for the directory"),
+):
+    """Add a directory to multi-directory index."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("multi_dir")
+
+    if not plugin or not registry.is_enabled("multi_dir"):
+        console.print("[yellow]Multi-directory plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable multi_dir")
+        return
+
+    plugin.add_directory_command(path, alias)
+
+
+@app.command("list-dirs")
+def list_dirs():
+    """List configured directories."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("multi_dir")
+
+    if not plugin or not registry.is_enabled("multi_dir"):
+        console.print("[yellow]Multi-directory plugin not enabled.[/yellow]")
+        return
+
+    plugin.list_directories_command()
+
+
+@app.command("remove-dir")
+def remove_dir(
+    alias_or_path: str = typer.Argument(..., help="Alias or path of directory to remove"),
+):
+    """Remove a directory from multi-directory index."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("multi_dir")
+
+    if not plugin or not registry.is_enabled("multi_dir"):
+        console.print("[yellow]Multi-directory plugin not enabled.[/yellow]")
+        return
+
+    plugin.remove_directory_command(alias_or_path)
+
+
+@app.command("reindex")
+def reindex():
+    """Re-index all configured directories."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("multi_dir")
+
+    if not plugin or not registry.is_enabled("multi_dir"):
+        console.print("[yellow]Multi-directory plugin not enabled.[/yellow]")
+        return
+
+    plugin.reindex_command()
+
+
+# =============================================================================
+# GitHub Auth Commands (from github_auth plugin)
+# =============================================================================
+
+
+@auth_app.command("github")
+def auth_github(
+    set_token: bool = typer.Option(False, "--set", help="Store a new token"),
+    status: bool = typer.Option(False, "--status", help="Show auth status"),
+    remove: bool = typer.Option(False, "--remove", help="Remove stored token"),
+    test: bool = typer.Option(False, "--test", help="Test authentication"),
+):
+    """Manage GitHub authentication."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("github_auth")
+
+    if not plugin or not registry.is_enabled("github_auth"):
+        console.print("[yellow]GitHub auth plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable github_auth")
+        return
+
+    plugin.auth_command(set_token=set_token, status=status, remove=remove, test=test)
+
+
+# =============================================================================
+# Guardrails Commands (from rag_guardrails plugin)
+# =============================================================================
+
+
+@app.command("guardrails")
+def guardrails(
+    strict: Optional[bool] = typer.Option(None, "--strict/--no-strict", help="Enable/disable strict mode"),
+    show: Optional[bool] = typer.Option(None, "--show/--hide", help="Show/hide verification in output"),
+    status: bool = typer.Option(False, "--status", help="Show current configuration"),
+):
+    """Configure RAG guardrails."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("rag_guardrails")
+
+    if not plugin or not registry.is_enabled("rag_guardrails"):
+        console.print("[yellow]RAG guardrails plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable rag_guardrails")
+        return
+
+    plugin.guardrails_command(strict=strict, show_verification=show, status=status)
+
+
+# =============================================================================
+# Context7 Commands (from context7 plugin)
+# =============================================================================
+
+
+@app.command("context7")
+def context7(
+    status: bool = typer.Option(False, "--status", help="Show Context7 status"),
+    lookup: Optional[str] = typer.Option(None, "--lookup", "-l", help="Look up library docs"),
+    topic: Optional[str] = typer.Option(None, "--topic", "-t", help="Specific topic to search"),
+):
+    """Context7 library research."""
+    from .plugins import get_registry
+
+    registry = get_registry()
+    plugin = registry.get("context7")
+
+    if not plugin or not registry.is_enabled("context7"):
+        console.print("[yellow]Context7 plugin not enabled.[/yellow]")
+        console.print("Enable with: assistant plugins enable context7")
+        return
+
+    plugin.context7_command(status=status, lookup=lookup, topic=topic)
+
+
+# =============================================================================
+# Main Entry Point
+# =============================================================================
+
+
+def _initialize_plugins():
+    """Initialize enabled plugins at startup."""
+    try:
+        from .plugins import get_registry
+        registry = get_registry()
+        registry.initialize_enabled()
+    except Exception as e:
+        # Don't fail startup if plugins can't be initialized
+        pass
+
 
 def main():
     """Main entry point."""
+    _initialize_plugins()
     app()
 
 

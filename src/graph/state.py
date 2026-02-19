@@ -14,6 +14,8 @@ class TaskType(str, Enum):
     TESTING = "testing"
     REVIEW = "review"
     MULTI_AGENT = "multi_agent"
+    PRD = "prd"  # Product Requirements Document creation
+    PRD_IMPLEMENT = "prd_implement"  # PRD-driven implementation
 
 
 class AgentState(TypedDict):
@@ -37,6 +39,13 @@ class AgentState(TypedDict):
     implementation_result: Optional[str]
     testing_result: Optional[str]
     review_result: Optional[str]
+    prd_result: Optional[str]
+
+    # PRD workflow state
+    prd_file_path: Optional[str]  # Path to saved PRD file
+    prd_approved: bool  # Whether PRD has been approved for implementation
+    prd_questions: list[str]  # Questions to ask user during Q&A
+    awaiting_user_input: bool  # Pause workflow for user input
 
     # Final aggregated result
     final_result: Optional[str]
@@ -77,6 +86,11 @@ def create_initial_state(
         implementation_result=None,
         testing_result=None,
         review_result=None,
+        prd_result=None,
+        prd_file_path=None,
+        prd_approved=False,
+        prd_questions=[],
+        awaiting_user_input=False,
         final_result=None,
         next_step=None,
         needs_review=False,

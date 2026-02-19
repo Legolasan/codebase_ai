@@ -4,6 +4,7 @@ from .file_ops import read_file, write_file, list_files
 from .code_search import search_codebase
 from .shell import run_command
 from .git_ops import git_status, git_diff, git_commit
+from .web_research import web_search, web_fetch, analyze_competitors
 
 __all__ = [
     "read_file",
@@ -14,4 +15,7 @@ __all__ = [
     "git_status",
     "git_diff",
     "git_commit",
+    "web_search",
+    "web_fetch",
+    "analyze_competitors",
 ]
