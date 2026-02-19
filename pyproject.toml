@@ -1,0 +1,54 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "coding-assistant"
+version = "0.1.0"
+description = "Multi-agent coding assistant with RAG-powered codebase understanding"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+license = "MIT"
+keywords = ["ai", "coding-assistant", "llm", "rag", "multi-agent"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+# Core dependencies
+langchain = "^0.2"
+langgraph = "^0.2"
+langchain-community = "^0.2"
+chromadb = "^0.4"
+tiktoken = "^0.5"
+rich = "^13.0"
+typer = "^0.9"
+python-dotenv = "^1.0"
+sentence-transformers = "^2.2"  # For HuggingFace embeddings
+
+# LLM Providers (at least one required)
+langchain-anthropic = { version = "^0.1", optional = true }
+langchain-openai = { version = "^0.1", optional = true }
+langchain-ollama = { version = "^0.1", optional = true }
+
+[tool.poetry.extras]
+anthropic = ["langchain-anthropic"]
+openai = ["langchain-openai"]
+ollama = ["langchain-ollama"]
+all = ["langchain-anthropic", "langchain-openai", "langchain-ollama"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+pytest-asyncio = "^0.23"
+black = "^24.0"
+ruff = "^0.3"
+
+[tool.poetry.scripts]
+assistant = "src.main:app"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]

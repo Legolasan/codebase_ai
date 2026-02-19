@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  coding-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: coding-assistant
+
+    # Environment variables - copy .env.example to .env and fill in
+    env_file:
+      - .env
+
+    # Mount your codebase here
+    volumes:
+      # Persist ChromaDB data
+      - chroma_data:/data/chroma_db
+      # Mount your codebase (change this path)
+      - ./codebase:/app/codebase:ro
+
+    # Interactive mode for chat
+    stdin_open: true
+    tty: true
+
+    # Override default command for interactive chat
+    command: ["chat"]
+
+volumes:
+  chroma_data:
+    driver: local
